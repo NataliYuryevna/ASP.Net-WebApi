@@ -1,0 +1,282 @@
+﻿<div id="buttonBlock">
+    <input type="hidden" id="RowId" value="-1" />
+    <button id="AddUser">Add</button>
+    <button id="EditUser">Edit</button>
+    <button id="DeleteUser">Delete</button>
+</div>
+<br />
+<div id="tableBlock"></div>
+<br />
+<div id="editBlock">
+    <input type="hidden" id="EditId" value="-1" />
+    <table>
+        <tr><td><label>UserName: </label></td><td><input type="text" id="UserName" /></td><td><label id="ErrorUserName" /></td></tr>
+        <tr><td><label>Department: </label></td><td><div id="Department"></div></td><td><label id="ErrorDepartment" /></td></tr>
+    </table>
+    <button id="SaveUser">Сохранить</button>
+</div>
+@section scripts
+{
+    <script type="text/javascript">
+        $(document).ready(function () {
+
+            GetAllUsers();
+
+            $("#SaveUser").click(function (event) {
+                event.preventDefault();
+                SaveUser();
+            });
+
+            $("#AddUser").click(function (event) {
+                event.preventDefault();
+                AddItem();
+            });
+
+            $("#EditUser").click(function (event) {
+                event.preventDefault();
+                EditItem();
+            });
+
+            $("#DeleteUser").click(function (event) {
+                event.preventDefault();
+                DeleteItem();
+            });
+
+            GetAllDepartments();
+        });
+
+        // Получить все department по ajax-запросу
+        function GetAllDepartments() {
+            $.ajax({
+                url: '/api/department',
+                type: 'GET',
+                dataType: 'json',
+                success: function (data) {
+                    WriteResponseDepartment(data);
+                }
+            });
+        }
+
+        // Получение всех user по ajax-запросу
+        function GetAllUsers() {
+            $("#editBlock").css('display', 'none');
+            $.ajax({
+                url: '/api/user',
+                type: 'GET',
+                dataType: 'json',
+                success: function (data) {
+                    WriteResponseUser(data);
+                }
+            });
+        }
+
+        //ошибки при обработке post или put запроса
+        function ErrorUser(jxqr) {
+            if (jxqr.responseText === "") {
+                alert(jxqr.statusText);
+            }
+            else {
+
+                var event = JSON.parse(jxqr.responseText);
+                var errors = "";
+
+                if (event.ModelState != undefined) {
+                    if (event.ModelState.UserName != undefined) {
+                        errors = "";
+                        for (var i = 0; i < event.ModelState.UserName.length; i++)
+                            errors = errors + event.ModelState.UserName[i] + " ";
+                        $("#ErrorUserName").text(errors);
+                    }
+                    if (event.ModelState.UserId != undefined) {
+                        errors = "";
+                        if (event.Message != undefined)
+                            errors = errors + event.Message;
+                        while (event.ModelState.UserId.length > 0) {
+                              errors = errors + "\n" + event.ModelState.UserId.pop();
+                        }
+                        $("#editBlock").css('display', 'none');
+                        $("#RowId").val("-1");
+                        alert(errors);
+                    }
+                    if (event.ModelState.DepartmentId != undefined) {
+                        errors = "";
+                        for (var i = 0; i < event.ModelState.DepartmentId.length; i++)
+                            errors = errors + event.ModelState.DepartmentId[i] + " ";
+                        GetAllDepartments();
+                        $("#ErrorDepartment").text(errors);
+                    }
+                }
+            }
+        }
+
+        // Добавление нового user
+        function SaveUser() {
+            var id = $('#EditId').val();
+            if (id == NaN) {
+                GetAllUsers();
+                alert("Данный запрос не выполнился");
+                return;
+            }
+            // получаем значения для добавляемого user
+            var user = {
+                Id: id,
+                UserName: $('#UserName').val(),
+                DepartmentId: $('#DepartmentId').val()
+            };
+
+            if (id < 0) {
+                $.ajax({
+                    url: '/api/user',
+                    type: 'POST',
+                    data: JSON.stringify(user),
+                    contentType: "application/json;charset=utf-8",
+                    success: function (data) {
+                        GetAllUsers();
+                        $("#editBlock").css('display', 'none');
+                    },
+                    error: function (jxqr, error, status) {
+                        ErrorUser(jxqr);
+                    }
+                });
+            }
+            else {
+                $.ajax({
+                    url: '/api/user/' + id,
+                    type: 'PUT',
+                    data: JSON.stringify(user),
+                    contentType: "application/json;charset=utf-8",
+                    success: function (data) {
+                        GetAllUsers();
+                        $("#editBlock").css('display', 'none');
+                    },
+                    error: function (jxqr, error, status) {
+                        ErrorUser(jxqr);
+                    }
+                });
+            }
+        }
+
+        // Удаление user
+        function DeleteUser(id) {
+            $.ajax({
+                url: '/api/user/' + id,
+                type: 'DELETE',
+                contentType: "application/json;charset=utf-8",
+                success: function (data) {
+                    GetAllUsers();
+                },
+                error: function () {
+                    alert("Данный user с id=" + id + " не существует");
+                    GetAllUsers();
+                }
+            });
+        }
+
+        // вывод полученных данных на экран user
+        function WriteResponseUser(Users) {
+            var strResult;
+            if (Users != null) {
+                var strResult = "<table border='1' class='table-select'><tr><th>#</th><th>UserName</th><th>Department</th></tr>";
+                $.each(Users, function (index, user) {
+                    strResult += "<tr><td>" + user.Id + "</td><td> " + user.UserName + "</td><td>" + user.Department.Title + "</td></tr>";
+                });
+                strResult += "</table>";
+            }
+            else {
+                strResult = "<p><b>Данных нет</b></p>"
+            }
+            $("#tableBlock").html(strResult);
+            $('.table-select tr').click(function () {
+                var self = $(this);
+                self.closest('table').find('tr').removeClass('active');
+                self.addClass('active');
+                $("#RowId").val(self.find('td').first().text());
+            });
+
+        }
+
+        // вывод полученных данных на экран Department
+        function WriteResponseDepartment(Departments) {
+            var strResult = "<select id=DepartmentId>";
+            $.each(Departments, function (index, department) {
+                strResult += "<option value=" + department.Id + ">" + department.Title + "</option>";
+            });
+            strResult += "</select>";
+
+            $("#Department").html(strResult);
+
+        }
+        // обработчик удаления
+        function DeleteItem() {
+            // получаем id удаляемого объекта
+            var id = $("#RowId").val();
+            if (id > 0) {
+                $("#RowId").val("-1");
+                GetAllUsers();
+                DeleteUser(id);
+            }
+            else {
+                alert("Выберите строку");
+            }
+        }
+        // обработчик редактирования
+        function EditItem() {
+            // получаем id редактируемого объекта
+            var id = $("#RowId").val();
+            if (id > 0) {
+                $("#RowId").val("-1");
+                GetAllUsers();
+                GetAllDepartments();
+                GetUser(id);
+            }
+            else {
+                alert("Выберите строку");
+            }
+        }
+
+        // обработчик добавления
+        function AddItem() {
+            GetAllUsers();
+            // получаем id редактируемого объекта
+            $("#RowId").val("-1");
+            $("#EditId").val("-1");
+            GetAllDepartments();
+            $("#UserName").val("");
+            $("#editBlock").css('display', 'block');
+        }
+
+        // вывод данных редактируемого user в поля для редактирования
+        function ShowUser(user) {
+            if (user != null) {
+                $("#editBlock").css('display', 'block');
+                $("#EditId").val(user.Id);
+                $("#UserName").val(user.UserName);
+                $("#DepartmentId").val(user.DepartmentId);
+            }
+            else {
+                alert("Данного user не существует");
+                GetAllUsers();
+            }
+        }
+
+        // запрос user на редактирование
+        function GetUser(id) {
+            $.ajax({
+                url: '/api/user/' + id,
+                type: 'GET',
+                dataType: 'json',
+                success: function (data) {
+                    ShowUser(data);
+                }
+            });
+        }
+
+    </script>
+    <style>
+        .table-select tr.active td {
+            background: #6598C7;
+            color: #fff;
+            outline: 0;
+        }
+    </style>
+}
